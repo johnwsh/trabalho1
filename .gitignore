@@ -1,7 +1,5 @@
 /.venv
-/criarPastas.py
 /main.exe
-/result.csv
 /result_genetic_pop10
 /result_genetic_pop100
 /result_genetic_pop15
