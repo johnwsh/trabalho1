@@ -6,6 +6,7 @@
 #include <time.h>
 #include <iostream>
 #include <fstream>
+#include <filesystem>
 
 using namespace std;
 
@@ -24,9 +25,10 @@ class item {
 class estado {
     public:
         vector<item>* itemPointer;
-        vector<bool> itemsPertenc;
+        vector<int8_t> itemsPertenc;
         int backpackCurrent;
         int backpackMax;
+        int fitness;
 
         estado(int _backpackMax, vector<item>* _itemPointer){
             backpackCurrent = 0;
@@ -37,23 +39,30 @@ class estado {
 };
 
 void fixState(estado &state, default_random_engine &generator){
-    //recebemos um estado quebrado, ou seja, com peso estourado, e removemos itens aleatórios até corrigir
-    bool flagFixed = 0;
-    uniform_int_distribution<int> indexDistribution(0, state.itemsPertenc.size() - 1);
-
     if (state.backpackCurrent <= state.backpackMax) {
         return; 
     }
 
-    while (!flagFixed){
-        int index = indexDistribution(generator);
-        if (state.itemsPertenc[index]){
-            state.itemsPertenc[index] = 0;
-            state.backpackCurrent -= (*state.itemPointer)[index].peso;
-            if (state.backpackCurrent <= state.backpackMax){
-                flagFixed = 1;
-            }
-        } 
+    vector<int> itensAtivos;
+    itensAtivos.reserve(state.itemsPertenc.size()); 
+    
+    for (int i = 0; i < state.itemsPertenc.size(); ++i) {
+        if (state.itemsPertenc[i]) {
+            itensAtivos.push_back(i);
+        }
+    }
+
+    shuffle(itensAtivos.begin(), itensAtivos.end(), generator);
+
+    for (int i = 0; i < itensAtivos.size(); ++i) {
+        int idx = itensAtivos[i]; 
+        
+        state.itemsPertenc[idx] = 0; // Tira da mochila
+        state.backpackCurrent -= (*state.itemPointer)[idx].peso; 
+        
+        if (state.backpackCurrent <= state.backpackMax) {
+            break; 
+        }
     }
 }
 
@@ -115,16 +124,16 @@ void mutacao (estado &filho, default_random_engine &generator){
     }
 }
 
-int torneio (vector<estado> populacao, default_random_engine &generator){
+int torneio (vector<estado> &populacao, default_random_engine &generator){
     uniform_int_distribution<int> indexDistribution(0, populacao.size() - 1);
     int numParticipantes = populacao.size() / 4;
     int index = indexDistribution(generator);
     int indexPais = index;
-    int maiorValor = funcaoCusto(populacao[index]);
+    int maiorValor = populacao[index].fitness;
 
     for (int i = 0; i < numParticipantes - 1; i++){
         index = indexDistribution(generator);
-        int valorAtual = funcaoCusto(populacao[index]);
+        int valorAtual = populacao[index].fitness;
         if(valorAtual > maiorValor){
             maiorValor = valorAtual;
             indexPais = index;
@@ -138,28 +147,29 @@ int main(){
     //PARÂMETROS PARA O PROBLEMA
     int MAXVALUEITEM = 25;
     int MAXWEIGHTITEM = 30;
-    int NUMITEMS = 200;
+    int NUMITEMS = 100;
     int BACKPACKMAX = 500;
     //==========================
     int NUMPOPULACAO;
-    int ITERACOES = 1000;
+    int ITERACOES = 500;
     int ITERLARGE = 100;
 
-    for(NUMPOPULACAO = 5; NUMPOPULACAO <= 100; NUMPOPULACAO += 5){
+    vector<item> items;
+    default_random_engine generator;
+    generator.seed(time(0));
+            
+    for (int i = 0; i< NUMITEMS; i++){
+        item it = genRandomItem(generator, 1, MAXVALUEITEM, 1, MAXWEIGHTITEM);
+        items.push_back(it);
+    }
+
+    for(NUMPOPULACAO = 5; NUMPOPULACAO <= 85; NUMPOPULACAO += 5){
+        filesystem::create_directories("result_genetic_pop" + to_string(NUMPOPULACAO));
         for (int k = 0; k< ITERLARGE; k++){
-            default_random_engine generator;
-            generator.seed(time(0));
 
             ofstream outFile;
             outFile.open("result_genetic_pop" + to_string(NUMPOPULACAO) + "/result_genetics_" + to_string(k) + ".csv");
             outFile << "iteracao,lucro\n";
-
-            vector<item> items;
-            
-            for (int i = 0; i< NUMITEMS; i++){
-                item it = genRandomItem(generator, 1, MAXVALUEITEM, 1, MAXWEIGHTITEM);
-                items.push_back(it);
-            }
             
             uniform_int_distribution<int> distCoinFlip(0,1);
             vector<estado> populacao;
@@ -177,23 +187,25 @@ int main(){
                 }
                 
                 fixState(estadoAleatorio, generator);
+                estadoAleatorio.fitness = funcaoCusto(estadoAleatorio);
                 populacao.push_back(estadoAleatorio);
             }
 
             vector<estado> filhos;
+            filhos.reserve(NUMPOPULACAO);
             //loop função genética
             for (int i = 0; i < ITERACOES; i ++){
 
                 int maiorLucro = 0;
                 int pesoMaiorLucro;
                 for (int k = 0; k < populacao.size(); k++){
-                    int lucroAtual = funcaoCusto(populacao[k]);
+                    int lucroAtual = populacao[k].fitness;
                     if (lucroAtual > maiorLucro){
                         maiorLucro = lucroAtual;
                         pesoMaiorLucro = populacao[k].backpackCurrent;
                     }
                 }
-                cout << "Iteracao: " << i << " | Maior Lucro: " << maiorLucro << " | Peso: " << pesoMaiorLucro <<endl;
+                //cout << "Iteracao: " << i << " | Maior Lucro: " << maiorLucro << " | Peso: " << pesoMaiorLucro <<endl;
                 outFile << i << "," << maiorLucro << "\n";
 
                 filhos.clear();
@@ -209,6 +221,7 @@ int main(){
                     }
                     estado filho = crossover(populacao[indexPai], populacao[indexMae], generator);
                     mutacao(filho, generator);
+                    filho.fitness = funcaoCusto(filho);
                     filhos.push_back(filho);
                 }
                 populacao = filhos;

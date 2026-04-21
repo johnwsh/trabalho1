@@ -3,7 +3,7 @@ import glob
 import matplotlib.pyplot as plt
 
 def main():
-    arquivos_csv = glob.glob("result_genetics_*.csv")
+    arquivos_csv = glob.glob("result_genetic_pop75/result_genetics_*.csv")
 
     lista_dfs = []
 
@@ -13,20 +13,24 @@ def main():
 
     df_completo = pd.concat(lista_dfs, ignore_index=True)
 
-    df_media = df_completo.groupby('iteracao')['lucro'].mean().reset_index()
+    df_stats = df_completo.groupby('iteracao')['lucro'].agg(['mean', 'max', 'min']).reset_index()
 
     plt.figure(figsize=(10, 6))
     
-    plt.plot(df_media['iteracao'], df_media['lucro'], color='blue', linewidth=2, label='Lucro Médio')
+    plt.plot(df_stats['iteracao'], df_stats['mean'], color='blue', linewidth=2, label='Lucro Médio')
     
-    plt.title('Curva de Evolução do Algoritmo Genético (Média de 100 Execuções)')
+    plt.plot(df_stats['iteracao'], df_stats['max'], color='green', linewidth=1, linestyle='--', alpha=0.6, label='Lucro Máximo')
+    plt.plot(df_stats['iteracao'], df_stats['min'], color='red', linewidth=1, linestyle='--', alpha=0.6, label='Lucro Mínimo')
+    
+    plt.fill_between(df_stats['iteracao'], df_stats['min'], df_stats['max'], color='blue', alpha=0.15)
+    
+    plt.title('Curva de Evolução do Algoritmo Genético (População 75)')
     plt.xlabel('Geração (Iteração)')
-    plt.ylabel('Lucro Médio')
+    plt.ylabel('Lucro')
     plt.grid(True, linestyle='--', alpha=0.7)
     plt.legend()
     
-    plt.savefig('grafico_evolucao_media.png', dpi=300)
-    plt.show()
+    plt.savefig('grafico_evolucao_max_min75.png', dpi=300)
 
 if __name__ == "__main__":
     main()
